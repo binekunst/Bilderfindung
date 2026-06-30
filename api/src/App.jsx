@@ -387,7 +387,8 @@ export default function App() {
 
   return (
     <div style={{
-      minHeight: "100vh", background: "#0f1f14",
+      minHeight: "100vh", minHeight: "-webkit-fill-available",
+      background: "#0f1f14",
       display: "flex", flexDirection: "column",
       fontFamily: "'Georgia', 'Times New Roman', serif", color: "#d4eacc"
     }}>
@@ -558,3 +559,4 @@ export default function App() {
     </div>
   );
 }
+
