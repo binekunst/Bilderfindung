@@ -323,7 +323,7 @@ export default function App() {
     try {
       const reply = await callClaude([], "__START__", null);
       const clean = reply.replace("[KONZEPT_BEREIT]", "").trim();
-      setMessages([{ role: "assistant", text: clean }]);
+      setMessages([{ role: "assistant", text: clean, isKonzept: false }]);
       setLatestAssistantIndex(0);
       if (reply.includes("[KONZEPT_BEREIT]")) setKonzept(clean);
     } catch {
@@ -476,7 +476,7 @@ export default function App() {
           <>
             {messages.map((m, i) =>
               m.role === "assistant"
-                ? <AssistantMessage key={i} text={m.text} isLatest={i === latestAssistantIndex} />
+                ? <AssistantMessage key={i} text={m.text} isLatest={i === latestAssistantIndex} isKonzept={m.isKonzept} />
                 : <UserMessage key={i} text={m.text} image={m.image} />
             )}
             {loading && <TypingIndicator />}
@@ -554,7 +554,7 @@ export default function App() {
       )}
 
       {/* Konzept-Modal */}
-      {konzept && <KonzeptKarte konzept={konzept} onClose={() => setKonzept(null)} />}
+      {/* Konzept wird direkt im Chat angezeigt */}
     </div>
   );
 }
