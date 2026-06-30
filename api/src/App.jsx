@@ -180,24 +180,48 @@ function KonzeptKarte({ konzept, onClose }) {
 
   return (
     <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      zIndex: 100, padding: "24px"
+      position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+      background: "rgba(0,0,0,0.85)",
+      zIndex: 100, padding: "16px",
+      display: "flex", alignItems: "center", justifyContent: "center"
     }}>
       <div style={{
         background: "#142218", border: "1px solid #6a4820",
-        borderRadius: "4px", padding: "36px 40px", maxWidth: "520px", width: "100%",
-        maxHeight: "85vh", overflowY: "auto", WebkitOverflowScrolling: "touch",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.8)"
+        borderRadius: "4px", width: "100%", maxWidth: "520px",
+        maxHeight: "90vh",
+        boxShadow: "0 20px 60px rgba(0,0,0,0.8)",
+        display: "flex", flexDirection: "column",
+        overflow: "hidden"
       }}>
+        {/* Fixed header with close button — always reachable */}
         <div style={{
-          fontSize: "0.7rem", letterSpacing: "0.18em", color: "#4a9e60",
-          textTransform: "uppercase", marginBottom: "20px"
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "20px 24px 12px 24px", flexShrink: 0
         }}>
-          Dein Bildkonzept
+          <div style={{
+            fontSize: "0.7rem", letterSpacing: "0.18em", color: "#4a9e60",
+            textTransform: "uppercase"
+          }}>
+            Dein Bildkonzept
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              background: "transparent", border: "none", color: "#8ec87a",
+              fontSize: "1.4rem", lineHeight: 1, cursor: "pointer", padding: "4px 8px"
+            }}
+          >
+            ×
+          </button>
         </div>
+
+        {/* Scrollable body */}
         <div style={{
-          width: "40px", height: "2px", background: "#4a9e60", marginBottom: "24px"
+          overflowY: "scroll", WebkitOverflowScrolling: "touch",
+          padding: "0 24px 24px 24px", flex: "1 1 auto", minHeight: 0
+        }}>
+          <div style={{
+            width: "40px", height: "2px", background: "#4a9e60", marginBottom: "24px"
         }} />
         {lines.map((line, i) => (
           <p key={i} style={{
@@ -229,11 +253,11 @@ function KonzeptKarte({ konzept, onClose }) {
             Weiter im Gespräch
           </button>
         </div>
+        </div>
       </div>
     </div>
   );
 }
-
 // ── Main App ──────────────────────────────────────────────────────────────────
 
 export default function App() {
