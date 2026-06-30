@@ -80,3 +80,443 @@ BEGINN
 ══════════════════════════════════════════
 
 Begrüße die Schüler*in kurz und einladend (2–3 Sätze). Erkläre in einem Satz was sie hier erwartet. Stelle eine erste offene Frage zur Bildidee – oder lade sie ein, direkt eine Skizze hochzuladen. Ton: warm, neugierig, auf Augenhöhe.`;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const LOADING_PHRASES = [
+  "Betrachtet …", "Denkt nach …", "Schaut genau hin …", "Überlegt …"
+];
+
+function useTypewriter(text, speed = 18) {
+  const [displayed, setDisplayed] = useState("");
+  useEffect(() => {
+    setDisplayed("");
+    if (!text) return;
+    let i = 0;
+    const iv = setInterval(() => {
+      i++;
+      setDisplayed(text.slice(0, i));
+      if (i >= text.length) clearInterval(iv);
+    }, speed);
+    return () => clearInterval(iv);
+  }, [text]);
+  return displayed;
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function TypingIndicator() {
+  const [phrase] = useState(() => LOADING_PHRASES[Math.floor(Math.random() * LOADING_PHRASES.length)]);
+  const [dots, setDots] = useState("");
+  useEffect(() => {
+    const iv = setInterval(() => setDots(d => d.length >= 3 ? "" : d + "."), 450);
+    return () => clearInterval(iv);
+  }, []);
+  return (
+    <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: "20px" }}>
+      <div style={{
+        background: "#142218", border: "1px solid #3a2810",
+        borderRadius: "3px 14px 14px 14px", padding: "12px 18px",
+        color: "#8ec87a", fontStyle: "italic", fontSize: "0.88rem", letterSpacing: "0.02em"
+      }}>
+        {phrase}{dots}
+      </div>
+    </div>
+  );
+}
+
+function AssistantMessage({ text, isLatest }) {
+  const displayed = useTypewriter(isLatest ? text : null);
+  const content = isLatest ? displayed : text;
+  return (
+    <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: "20px" }}>
+      <div style={{
+        background: "#122018", border: "1px solid #2e1e0e",
+        borderRadius: "3px 14px 14px 14px", padding: "16px 20px",
+        maxWidth: "78%", color: "#d4eacc", fontSize: "0.95rem",
+        lineHeight: "1.75", whiteSpace: "pre-wrap"
+      }}>
+        {content}
+      </div>
+    </div>
+  );
+}
+
+function UserMessage({ text, image }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
+      <div style={{
+        background: "#1a3022", border: "1px solid #5a3820",
+        borderRadius: "14px 3px 14px 14px", padding: "14px 18px",
+        maxWidth: "72%", color: "#e2f0d8", fontSize: "0.95rem", lineHeight: "1.7"
+      }}>
+        {image && (
+          <img src={image} alt="Skizze" style={{
+            maxWidth: "100%", borderRadius: "4px",
+            marginBottom: text ? "10px" : "0",
+            border: "1px solid #3a2810", display: "block"
+          }} />
+        )}
+        {text && <span style={{ whiteSpace: "pre-wrap" }}>{text}</span>}
+      </div>
+    </div>
+  );
+}
+
+function KonzeptKarte({ konzept, onClose }) {
+  const lines = konzept.split('\n').filter(l => l.trim());
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 100, padding: "24px"
+    }}>
+      <div style={{
+        background: "#142218", border: "1px solid #6a4820",
+        borderRadius: "4px", padding: "36px 40px", maxWidth: "520px", width: "100%",
+        boxShadow: "0 20px 60px rgba(0,0,0,0.8)"
+      }}>
+        <div style={{
+          fontSize: "0.7rem", letterSpacing: "0.18em", color: "#4a9e60",
+          textTransform: "uppercase", marginBottom: "20px"
+        }}>
+          Dein Bildkonzept
+        </div>
+        <div style={{
+          width: "40px", height: "2px", background: "#4a9e60", marginBottom: "24px"
+        }} />
+        {lines.map((line, i) => (
+          <p key={i} style={{
+            color: "#d4eacc", fontSize: "0.95rem", lineHeight: "1.75",
+            marginBottom: "10px", whiteSpace: "pre-wrap"
+          }}>
+            {line}
+          </p>
+        ))}
+        <div style={{ marginTop: "32px", display: "flex", gap: "12px" }}>
+          <button
+            onClick={() => window.print()}
+            style={{
+              flex: 1, padding: "11px", background: "#4a9e60",
+              border: "none", borderRadius: "3px", color: "#fff",
+              fontSize: "0.88rem", cursor: "pointer", letterSpacing: "0.05em"
+            }}
+          >
+            Drucken / Speichern
+          </button>
+          <button
+            onClick={onClose}
+            style={{
+              flex: 1, padding: "11px", background: "transparent",
+              border: "1px solid #3a2810", borderRadius: "3px", color: "#8ec87a",
+              fontSize: "0.88rem", cursor: "pointer"
+            }}
+          >
+            Weiter im Gespräch
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main App ──────────────────────────────────────────────────────────────────
+
+export default function App() {
+  const [messages, setMessages] = useState([]); // {role, text, image, imageBase64, mediaType}
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [started, setStarted] = useState(false);
+  const [pendingImage, setPendingImage] = useState(null);
+  const [konzept, setKonzept] = useState(null);
+  const [latestAssistantIndex, setLatestAssistantIndex] = useState(-1);
+  const bottomRef = useRef(null);
+  const fileRef = useRef(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
+
+  // ── API call ────────────────────────────────────────────────────────────────
+  async function callClaude(history, userText, imageData) {
+    const apiMessages = history.map(m => {
+      if (m.role === "user" && m.imageBase64) {
+        return {
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: m.mediaType, data: m.imageBase64 } },
+            { type: "text", text: m.text || "Ich habe diese Skizze hochgeladen." }
+          ]
+        };
+      }
+      return { role: m.role, content: m.text };
+    });
+
+    if (imageData) {
+      apiMessages.push({
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: imageData.mediaType, data: imageData.base64 } },
+          { type: "text", text: userText || "Ich habe diese Skizze hochgeladen." }
+        ]
+      });
+    } else if (userText) {
+      apiMessages.push({ role: "user", content: userText });
+    }
+
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        system: SYSTEM_PROMPT,
+        messages: apiMessages,
+      })
+    });
+    const data = await res.json();
+    return data.content?.map(b => b.text || "").join("") || "Keine Antwort.";
+  }
+
+  // ── Start ───────────────────────────────────────────────────────────────────
+  async function startConversation() {
+    setStarted(true);
+    setLoading(true);
+    try {
+      const reply = await callClaude([], "__START__", null);
+      const clean = reply.replace("[KONZEPT_BEREIT]", "").trim();
+      setMessages([{ role: "assistant", text: clean }]);
+      setLatestAssistantIndex(0);
+      if (reply.includes("[KONZEPT_BEREIT]")) setKonzept(clean);
+    } catch {
+      setMessages([{ role: "assistant", text: "Verbindungsfehler – bitte Seite neu laden." }]);
+    }
+    setLoading(false);
+  }
+
+  // ── Send ────────────────────────────────────────────────────────────────────
+  async function sendMessage() {
+    const text = input.trim();
+    if (!text && !pendingImage) return;
+
+    const userMsg = {
+      role: "user",
+      text,
+      image: pendingImage?.dataUrl || null,
+      imageBase64: pendingImage?.base64 || null,
+      mediaType: pendingImage?.mediaType || null,
+    };
+
+    const newHistory = [...messages, userMsg];
+    setMessages(newHistory);
+    setInput("");
+    setPendingImage(null);
+    setLoading(true);
+
+    try {
+      const reply = await callClaude(messages, text, pendingImage);
+      const clean = reply.replace("[KONZEPT_BEREIT]", "").trim();
+      const updated = [...newHistory, { role: "assistant", text: clean }];
+      setMessages(updated);
+      setLatestAssistantIndex(updated.length - 1);
+      if (reply.includes("[KONZEPT_BEREIT]")) setKonzept(clean);
+    } catch {
+      const updated = [...newHistory, { role: "assistant", text: "Verbindungsfehler – bitte nochmal versuchen." }];
+      setMessages(updated);
+      setLatestAssistantIndex(updated.length - 1);
+    }
+    setLoading(false);
+  }
+
+  function handleKey(e) {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  }
+
+  function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const dataUrl = ev.target.result;
+      setPendingImage({ dataUrl, base64: dataUrl.split(",")[1], mediaType: file.type });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  }
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+  const canSend = !loading && (input.trim() || pendingImage);
+
+  return (
+    <div style={{
+      minHeight: "100vh", background: "#0f1f14",
+      display: "flex", flexDirection: "column",
+      fontFamily: "'Georgia', 'Times New Roman', serif", color: "#d4eacc"
+    }}>
+
+      {/* Header */}
+      <div style={{
+        borderBottom: "1px solid #2a1a0a", padding: "16px 24px",
+        background: "#0d1a10", display: "flex", alignItems: "center",
+        justifyContent: "space-between", flexShrink: 0
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+          <div style={{
+            width: "8px", height: "8px", borderRadius: "50%",
+            background: "#4a9e60", flexShrink: 0
+          }} />
+          <div>
+            <div style={{ fontSize: "0.95rem", fontWeight: "bold", color: "#f0d060", letterSpacing: "0.04em" }}>
+              Bilderfindung
+            </div>
+            <div style={{ fontSize: "0.72rem", color: "#2e6040", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: "1px" }}>
+              Im Geiste von Lynette Yiadom-Boakye
+            </div>
+          </div>
+        </div>
+        {konzept && (
+          <button
+            onClick={() => setKonzept(konzept)}
+            style={{
+              padding: "7px 16px", background: "transparent",
+              border: "1px solid #6a4820", borderRadius: "2px",
+              color: "#8ec87a", fontSize: "0.8rem", cursor: "pointer",
+              letterSpacing: "0.06em"
+            }}
+          >
+            Mein Konzept
+          </button>
+        )}
+      </div>
+
+      {/* Chat */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "28px 24px 12px" }}>
+        {!started ? (
+          <div style={{
+            display: "flex", flexDirection: "column", alignItems: "center",
+            justifyContent: "center", minHeight: "60vh", textAlign: "center", gap: "24px"
+          }}>
+            {/* Dekoratives Element */}
+            <div style={{
+              width: "60px", height: "60px", borderRadius: "50%",
+              background: "linear-gradient(135deg, #162a1c, #2a5c38)",
+              border: "1px solid #2e6040", marginBottom: "8px"
+            }} />
+            <div style={{
+              fontSize: "1.1rem", color: "#8ec87a", letterSpacing: "0.06em",
+              fontStyle: "italic"
+            }}>
+              Erfinde eine Figur.
+            </div>
+            <div style={{
+              fontSize: "0.85rem", color: "#3a7050", maxWidth: "340px",
+              lineHeight: "1.9", letterSpacing: "0.02em"
+            }}>
+              Du wirst ein Gespräch führen, das dir hilft, eine eigene Bildidee zu entwickeln.
+              Egal ob du mit einer Erinnerung, einem Gefühl oder einer ersten Skizze startest –
+              gemeinsam übersetzen wir das in eine konkrete Bildidee,
+              bei der Atmosphäre und Stimmung im Vordergrund stehen.
+            </div>
+            <div style={{ width: "1px", height: "32px", background: "#1a3022" }} />
+            <div style={{ fontSize: "0.78rem", color: "#3a6048", letterSpacing: "0.04em" }}>
+              Du kannst schreiben und Skizzen hochladen.
+            </div>
+            <button
+              onClick={startConversation}
+              style={{
+                marginTop: "8px", padding: "13px 36px",
+                background: "transparent", border: "1px solid #8a6030",
+                borderRadius: "2px", color: "#f0d060", fontSize: "0.9rem",
+                cursor: "pointer", letterSpacing: "0.1em",
+                fontFamily: "inherit", transition: "all 0.2s"
+              }}
+            >
+              Gespräch beginnen
+            </button>
+          </div>
+        ) : (
+          <>
+            {messages.map((m, i) =>
+              m.role === "assistant"
+                ? <AssistantMessage key={i} text={m.text} isLatest={i === latestAssistantIndex} />
+                : <UserMessage key={i} text={m.text} image={m.image} />
+            )}
+            {loading && <TypingIndicator />}
+            <div ref={bottomRef} />
+          </>
+        )}
+      </div>
+
+      {/* Input */}
+      {started && (
+        <div style={{
+          borderTop: "1px solid #2a1a0a", padding: "16px 24px",
+          background: "#0d1a10", flexShrink: 0
+        }}>
+          {pendingImage && (
+            <div style={{ marginBottom: "10px", display: "flex", alignItems: "center", gap: "10px" }}>
+              <img src={pendingImage.dataUrl} alt="Vorschau"
+                style={{ height: "52px", borderRadius: "3px", border: "1px solid #3a2010" }} />
+              <button onClick={() => setPendingImage(null)}
+                style={{ background: "none", border: "none", color: "#2e6040", cursor: "pointer", fontSize: "0.8rem" }}>
+                Entfernen
+              </button>
+            </div>
+          )}
+          <div style={{ display: "flex", gap: "10px", alignItems: "flex-end" }}>
+            <button
+              onClick={() => fileRef.current?.click()}
+              title="Skizze hochladen"
+              style={{
+                flexShrink: 0, width: "42px", height: "42px",
+                background: "transparent", border: "1px solid #2a1a0a",
+                borderRadius: "3px", color: "#3a7050", cursor: "pointer",
+                fontSize: "1.1rem", display: "flex", alignItems: "center", justifyContent: "center"
+              }}
+            >
+              ⬆
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFile} />
+
+            <textarea
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKey}
+              placeholder="Schreib hier – oder lade eine Skizze hoch …"
+              rows={2}
+              disabled={loading}
+              style={{
+                flex: 1, background: "#111e14", border: "1px solid #2a1a0a",
+                borderRadius: "3px", color: "#d4eacc", padding: "10px 14px",
+                fontFamily: "inherit", fontSize: "0.92rem", resize: "none",
+                outline: "none", lineHeight: "1.6"
+              }}
+            />
+
+            <button
+              onClick={sendMessage}
+              disabled={!canSend}
+              style={{
+                flexShrink: 0, width: "42px", height: "42px",
+                background: canSend ? "#4a9e60" : "transparent",
+                border: `1px solid ${canSend ? "#4a9e60" : "#1a3022"}`,
+                borderRadius: "3px",
+                color: canSend ? "#fff" : "#2a4a34",
+                cursor: canSend ? "pointer" : "not-allowed",
+                fontSize: "1.1rem", display: "flex", alignItems: "center", justifyContent: "center"
+              }}
+            >
+              →
+            </button>
+          </div>
+          <div style={{ fontSize: "0.7rem", color: "#2a4a34", marginTop: "8px", letterSpacing: "0.04em" }}>
+            Enter zum Senden · Shift+Enter für Zeilenumbruch · ⬆ für Skizzen
+          </div>
+        </div>
+      )}
+
+      {/* Konzept-Modal */}
+      {konzept && <KonzeptKarte konzept={konzept} onClose={() => setKonzept(null)} />}
+    </div>
+  );
+}
